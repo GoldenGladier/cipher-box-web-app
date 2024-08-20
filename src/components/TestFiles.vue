@@ -1,5 +1,6 @@
 <template>
   <div>
+    <button @click="simpleClick">Test click</button>
     <button @click="openFile">Abrir Archivo</button>
     <button @click="saveFile">Guardar Archivo</button>
   </div>
@@ -9,6 +10,9 @@
 export default {
     component: 'TestFiles',
     methods: {
+        simpleClick() {
+            alert('El botón fue clickeado!');
+        },
         async openFile() {
             try {
                 const [fileHandle] = await window.showOpenFilePicker();
