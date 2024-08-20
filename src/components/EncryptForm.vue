@@ -5,7 +5,7 @@
       <div class="mode-selection">
         <label>
           <input type="radio" name="mode" value="folder" v-model="selectedMode" />
-          Folder
+          Folder test
         </label>
         <label>
           <input type="radio" name="mode" value="files" v-model="selectedMode" />
@@ -36,6 +36,9 @@
 </template>
 
 <script>
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+
 export default {
   name: 'EncryptForm',
   data() {
@@ -57,22 +60,31 @@ export default {
       try {
         // Convert password to a crypto key
         const key = await this.generateKey(this.password);
+        
+        const fileArray = this.selectedMode === 'files' ? this.files : this.folder;
 
-        // Encrypt files or folder
-        if (this.selectedMode === 'files' && this.files.length > 0) {
-          for (let file of this.files) {
-            const arrayBuffer = await file.arrayBuffer();
-            const encryptedData = await this.encryptData(arrayBuffer, key);
-            this.downloadEncryptedFile(encryptedData, file.name);
-          }
-        } else if (this.selectedMode === 'folder' && this.folder.length > 0) {
-          for (let file of this.folder) {
-            const arrayBuffer = await file.arrayBuffer();
-            const encryptedData = await this.encryptData(arrayBuffer, key);
-            this.downloadEncryptedFile(encryptedData, file.name);
-          }
-        } else {
+        if (fileArray.length === 0) {
           alert('Please select files or a folder to encrypt.');
+          return;
+        }
+
+        // Check if we need to create a zip file
+        if (this.selectedMode === 'folder' || fileArray.length > 8) {
+          const zip = new JSZip();
+          for (let file of fileArray) {
+            const arrayBuffer = await file.arrayBuffer();
+            const encryptedData = await this.encryptData(arrayBuffer, key);
+            zip.file(`${file.name}.encrypted`, new Uint8Array(encryptedData));
+          }
+          const content = await zip.generateAsync({ type: 'blob' });
+          saveAs(content, 'encrypted_files.zip');
+        } else {
+          // Download each file individually
+          for (let file of fileArray) {
+            const arrayBuffer = await file.arrayBuffer();
+            const encryptedData = await this.encryptData(arrayBuffer, key);
+            this.downloadEncryptedFile(encryptedData, file.name);
+          }
         }
       } catch (error) {
         console.error('Encryption failed:', error);
@@ -111,10 +123,10 @@ export default {
         key,
         data
       );
-      return { iv, encrypted };
+      return new Uint8Array([...iv, ...new Uint8Array(encrypted)]); // Concatenate IV and encrypted data
     },
-    downloadEncryptedFile({ iv, encrypted }, fileName) {
-      const blob = new Blob([iv, new Uint8Array(encrypted)], { type: 'application/octet-stream' });
+    downloadEncryptedFile(encryptedData, fileName) {
+      const blob = new Blob([encryptedData], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

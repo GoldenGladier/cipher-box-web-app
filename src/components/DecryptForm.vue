@@ -37,11 +37,14 @@
 </template>
 
 <script>
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+
 export default {
   name: 'DecryptForm',
   data() {
     return {
-      selectedMode: 'folder', // Modo predeterminado
+      selectedMode: 'folder', // Default mode is folder
       password: '',
       files: [],
       folder: null,
@@ -56,24 +59,29 @@ export default {
     },
     async decryptFiles() {
       try {
-        // Convertir la contraseña en una clave criptográfica
         const key = await this.generateKey(this.password);
+        const fileArray = this.selectedMode === 'files' ? this.files : this.folder;
 
-        // Desencriptar archivos o carpeta
-        if (this.selectedMode === 'files' && this.files.length > 0) {
-          for (let file of this.files) {
-            const arrayBuffer = await file.arrayBuffer();
-            const decryptedData = await this.decryptData(arrayBuffer, key);
-            this.downloadDecryptedFile(decryptedData, file.name);
-          }
-        } else if (this.selectedMode === 'folder' && this.folder.length > 0) {
-          for (let file of this.folder) {
-            const arrayBuffer = await file.arrayBuffer();
-            const decryptedData = await this.decryptData(arrayBuffer, key);
-            this.downloadDecryptedFile(decryptedData, file.name);
-          }
-        } else {
+        if (fileArray.length === 0) {
           alert('Please select encrypted files or a folder to decrypt.');
+          return;
+        }
+
+        if (this.selectedMode === 'folder' || fileArray.length > 8) {
+          const zip = new JSZip();
+          for (let file of fileArray) {
+            const arrayBuffer = await file.arrayBuffer();
+            const decryptedData = await this.decryptData(arrayBuffer, key);
+            zip.file(file.name.replace('.encrypted', ''), new Uint8Array(decryptedData));
+          }
+          const content = await zip.generateAsync({ type: 'blob' });
+          saveAs(content, 'decrypted_files.zip');
+        } else {
+          for (let file of fileArray) {
+            const arrayBuffer = await file.arrayBuffer();
+            const decryptedData = await this.decryptData(arrayBuffer, key);
+            this.downloadDecryptedFile(decryptedData, file.name);
+          }
         }
       } catch (error) {
         console.error('Decryption failed:', error);
@@ -93,7 +101,7 @@ export default {
       return window.crypto.subtle.deriveKey(
         {
           name: 'PBKDF2',
-          salt: encoder.encode('salt'), // Usar una sal apropiada en una aplicación real
+          salt: encoder.encode('salt'),
           iterations: 100000,
           hash: 'SHA-256'
         },
@@ -105,7 +113,6 @@ export default {
     },
     async decryptData(data, key) {
       try {
-        // Extraer el IV del inicio de los datos
         const iv = data.slice(0, 12);
         const encryptedData = data.slice(12);
 
@@ -129,14 +136,13 @@ export default {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName.replace('.encrypted', ''); // Remover la extensión .encrypted
+      a.download = fileName.replace('.encrypted', '');
       a.click();
       URL.revokeObjectURL(url);
     },
   },
 };
 </script>
-
 
 <style scoped>
 .container {
